@@ -2,6 +2,7 @@ package dns
 
 import (
 	"testing"
+	"github.com/miekg/dns"
 )
 
 func TestRadixName(t *testing.T) {
@@ -23,4 +24,16 @@ func TestRadixName(t *testing.T) {
 func TestInsert(t *testing.T) {
 }
 func TestRemove(t *testing.T) {
+	z := dns.NewZone("miek.nl.")
+	mx, _ := dns.NewRR("foo.miek.nl. MX 10 mx.miek.nl.")
+	z.Insert(mx)
+	zd, exact := z.Find("foo.miek.nl.")
+	if exact != true {
+		t.Fail() // insert broken?
+	}
+	z.Remove(zd.RR[dns.TypeMX][0])
+	zd, exact = z.Find("foo.miek.nl.")
+	if exact != false {
+		t.Errorf("zd(%s) exact(%s) still exists", zd, exact) // it should no longer be in the zone
+	}
 }

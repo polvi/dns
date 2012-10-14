@@ -31,7 +31,7 @@ func TestRemove(t *testing.T) {
 	if exact != true {
 		t.Fail() // insert broken?
 	}
-	z.Remove(zd.RR[dns.TypeMX][0])
+	z.Remove(mx)
 	zd, exact = z.Find("foo.miek.nl.")
 	if exact != false {
 		t.Errorf("zd(%s) exact(%s) still exists", zd, exact) // it should no longer be in the zone

@@ -7,7 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/miekg/dns"
+	"../../../dns"
 	"net"
 	"os"
 	"strconv"
@@ -51,6 +51,8 @@ func main() {
 	nameserver := "@" + conf.Servers[0]
 	qtype := uint16(0)
 	qclass := uint16(dns.ClassINET)
+	qopcode := dns.OpcodeQuery
+	update_ip := net.ParseIP("127.0.0.1")
 	var qname []string
 
 	flag.Parse()
@@ -86,6 +88,14 @@ Flags:
 		// If it looks like a class, it is a class
 		if k, ok := dns.Str_class[strings.ToUpper(flag.Arg(i))]; ok {
 			qclass = k
+			continue Flags
+		}
+		if k, ok := dns.Str_opcode[strings.ToUpper(flag.Arg(i))]; ok {
+			qopcode = k
+			continue Flags
+		}
+		if ip := net.ParseIP(flag.Arg(i)); ip != nil {
+			update_ip = ip
 			continue Flags
 		}
 		// If it starts with TYPExxx it is unknown rr
@@ -147,6 +157,7 @@ Flags:
 	m.MsgHdr.AuthenticatedData = *ad
 	m.MsgHdr.CheckingDisabled = *cd
 	m.MsgHdr.RecursionDesired = *rd
+	m.MsgHdr.Opcode = qopcode
 	m.Question = make([]dns.Question, 1)
 
 	if *dnssec || *nsid || *client != "" {
@@ -185,6 +196,13 @@ Flags:
 	}
 
 	for i, v := range qname {
+		if qopcode == dns.OpcodeUpdate {
+			m.Ns = make([]dns.RR, 1)
+			r := new(dns.RR_A)
+			r.Hdr = dns.RR_Header{Name: dns.Fqdn(v), Rrtype: qtype, Class: qclass, Ttl: 120}
+			r.A = update_ip
+			m.Ns[0] = r
+		}
 		m.Question[0] = dns.Question{dns.Fqdn(v), qtype, qclass}
 		m.Id = dns.Id()
 		if *query {
@@ -194,8 +212,8 @@ Flags:
 		// Add tsig
 		if *tsig != "" {
 			if algo, name, secret, ok := tsigKeyParse(*tsig); ok {
-				m.SetTsig(name, algo, 300, time.Now().Unix())
 				c.TsigSecret = map[string]string{name: secret}
+				m.SetTsig(name, algo, 300, time.Now().Unix())
 			} else {
 				fmt.Fprintf(os.Stderr, "TSIG key data error\n")
 				return
@@ -280,7 +298,7 @@ func tsigKeyParse(s string) (algo, name, secret string, ok bool) {
 	case 3:
 		switch s1[0] {
 		case "hmac-md5":
-			return "hmac-md5.sig-alg.reg.int.", s1[0], s1[1], true
+			return "hmac-md5.sig-alg.reg.int.", s1[1], s1[2], true
 		case "hmac-sha1":
 			return "hmac-sha1.", s1[1], s1[2], true
 		case "hmac-sha256":
